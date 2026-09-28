@@ -247,14 +247,47 @@ const HTML = `<!DOCTYPE html>
       min-height: 0;
       min-width: 0;
       display: grid;
-      /* Inspector + Variables stay compact; Console takes leftover space */
-      grid-template-rows: auto auto minmax(0, 1fr);
+      /* Functions + Inspector + Variables compact; Console fills leftover */
+      grid-template-rows: auto auto auto minmax(0, 1fr);
       gap: 0.65rem;
       align-content: start;
     }
     .side > div {
       min-width: 0;
       min-height: 0;
+    }
+
+    .fn-panel {
+      display: grid;
+      gap: 0.45rem;
+    }
+    .fn-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 0.35rem;
+      align-items: center;
+    }
+    .fn-row select,
+    .fn-panel input,
+    .fn-panel select {
+      width: 100%;
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text);
+      background: #122029;
+      border: 1px solid var(--line);
+      border-radius: 0.45rem;
+      padding: 0.4rem 0.45rem;
+    }
+    .fn-row button {
+      padding: 0.4rem 0.55rem;
+      min-width: 2rem;
+    }
+    .fn-params {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.35;
     }
 
     h2 {
@@ -545,7 +578,7 @@ const HTML = `<!DOCTYPE html>
         border: none;
         border-top: 1px solid rgba(255,255,255,0.05);
         padding: 0.55rem 0.85rem;
-        grid-template-rows: auto auto minmax(0, 1fr);
+        grid-template-rows: auto auto auto minmax(0, 1fr);
         overflow: auto;
         max-height: 100%;
       }
@@ -616,6 +649,18 @@ const HTML = `<!DOCTYPE html>
 
     <section class="side">
       <div>
+        <h2>Functions</h2>
+        <div class="fn-panel">
+          <div class="fn-row">
+            <select id="fn-select" title="Active function"></select>
+            <button type="button" class="ghost" id="btn-fn-add" title="Add function">+</button>
+            <button type="button" class="ghost" id="btn-fn-del" title="Delete function">−</button>
+          </div>
+          <div id="fn-meta"></div>
+          <div class="fn-params" id="fn-params"></div>
+        </div>
+      </div>
+      <div>
         <h2>Inspector</h2>
         <div class="inspector" id="inspector">
           <p class="empty-state">Select a shape to edit its properties.</p>
@@ -663,7 +708,7 @@ const HTML = `<!DOCTYPE html>
             <span></span>
             <div class="add-col-label">Control</div>
             <button type="button" class="add-item" data-add="if"><span class="add-glyph if">If</span><span class="cap">If</span></button>
-            <button type="button" class="add-item" data-add="call" disabled title="Coming soon"><span class="add-glyph call">Call</span><span class="cap">Call</span></button>
+            <button type="button" class="add-item" data-add="call"><span class="add-glyph call">Call</span><span class="cap">Call</span></button>
             <span></span>
             <div class="add-col-label">Looping</div>
             <button type="button" class="add-item" data-add="while"><span class="add-glyph while">While</span><span class="cap">While</span></button>
@@ -697,20 +742,6 @@ const HTML = `<!DOCTYPE html>
 
   <script>
   (() => {
-    const SHAPE_DEFS = [
-      { type: "start", label: "Start", once: true },
-      { type: "declare", label: "Declare" },
-      { type: "input", label: "Input" },
-      { type: "assign", label: "Assign" },
-      { type: "output", label: "Output" },
-      { type: "if", label: "If" },
-      { type: "while", label: "While" },
-      { type: "for", label: "For" },
-      { type: "do", label: "Do" },
-      { type: "comment", label: "Comment" },
-      { type: "end", label: "End", once: true },
-    ];
-
     /* Classic Flowgorithm-inspired chart style */
     const STYLE = {
       fill: {
@@ -754,6 +785,8 @@ const HTML = `<!DOCTYPE html>
     };
 
     const state = {
+      functions: [],
+      activeFn: "Main",
       nodes: [],
       edges: [],
       selectedId: null,
@@ -781,6 +814,181 @@ const HTML = `<!DOCTYPE html>
     const btnRun = document.getElementById("btn-run");
     const btnStop = document.getElementById("btn-stop");
     const btnStep = document.getElementById("btn-step");
+    const fnSelect = document.getElementById("fn-select");
+    const fnMeta = document.getElementById("fn-meta");
+    const fnParams = document.getElementById("fn-params");
+
+    function getFn(name) {
+      return state.functions.find((f) => f.name === name);
+    }
+
+    function blankFunction(name, returnType = "None", parameters = []) {
+      state.idSeq = 1;
+      const s = makeNode("start", 260, 36);
+      const e = makeNode("end", 260, 220, { expression: "" });
+      return {
+        name,
+        returnType,
+        parameters: parameters.slice(),
+        nodes: [s, e],
+        edges: [{ from: s.id, to: e.id, branch: "next" }],
+        idSeq: state.idSeq,
+        pan: { x: 80, y: 28 },
+      };
+    }
+
+    function flushActive() {
+      const f = getFn(state.activeFn);
+      if (!f) return;
+      f.nodes = state.nodes;
+      f.edges = state.edges;
+      f.idSeq = state.idSeq;
+      f.pan = { x: state.pan.x, y: state.pan.y };
+    }
+
+    function loadActive() {
+      const f = getFn(state.activeFn) || state.functions[0];
+      if (!f) return;
+      state.activeFn = f.name;
+      state.nodes = f.nodes;
+      state.edges = f.edges;
+      state.idSeq = f.idSeq || 1;
+      state.pan = f.pan ? { x: f.pan.x, y: f.pan.y } : { x: 80, y: 28 };
+      state.selectedId = null;
+      state.linkFrom = null;
+    }
+
+    function switchFunction(name) {
+      if (!name || name === state.activeFn) return;
+      flushActive();
+      state.activeFn = name;
+      loadActive();
+      renderFnUi();
+      render();
+      renderInspector();
+    }
+
+    function renderFnUi() {
+      fnSelect.innerHTML = state.functions.map((f) =>
+        \`<option value="\${escapeAttr(f.name)}" \${f.name === state.activeFn ? "selected" : ""}>\${escapeAttr(f.name)}</option>\`
+      ).join("");
+      const f = getFn(state.activeFn);
+      if (!f) {
+        fnMeta.innerHTML = "";
+        fnParams.textContent = "";
+        return;
+      }
+      fnMeta.innerHTML =
+        select("fnReturn", "Return type", f.returnType, ["None", "Integer", "Real", "String", "Boolean"]) +
+        field("fnName", "Name", f.name) +
+        field("fnParams", "Parameters", f.parameters.map((p) => \`\${p.typeName} \${p.name}\`).join(", "));
+      fnParams.textContent = f.parameters.length
+        ? "params: " + f.parameters.map((p) => \`\${p.typeName} \${p.name}\`).join(", ")
+        : "no parameters";
+      const nameEl = fnMeta.querySelector('[data-prop="fnName"]');
+      const retEl = fnMeta.querySelector('[data-prop="fnReturn"]');
+      const parEl = fnMeta.querySelector('[data-prop="fnParams"]');
+      if (nameEl) {
+        nameEl.addEventListener("change", () => renameActiveFunction(nameEl.value.trim()));
+      }
+      if (retEl) {
+        retEl.addEventListener("change", () => {
+          f.returnType = retEl.value;
+          render();
+        });
+      }
+      if (parEl) {
+        parEl.addEventListener("change", () => {
+          f.parameters = parseParamList(parEl.value);
+          fnParams.textContent = f.parameters.length
+            ? "params: " + f.parameters.map((p) => \`\${p.typeName} \${p.name}\`).join(", ")
+            : "no parameters";
+        });
+      }
+      document.getElementById("btn-fn-del").disabled = f.name === "Main" || state.functions.length < 2;
+    }
+
+    function parseParamList(text) {
+      return String(text || "").split(",").map((part) => part.trim()).filter(Boolean).map((part) => {
+        const bits = part.split(/\\s+/);
+        if (bits.length >= 2) return { typeName: bits[0], name: bits[1] };
+        return { typeName: "Integer", name: bits[0] };
+      });
+    }
+
+    function renameActiveFunction(newName) {
+      if (!newName || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(newName)) {
+        log("Invalid function name.", "err");
+        renderFnUi();
+        return;
+      }
+      if (state.functions.some((f) => f.name === newName && f.name !== state.activeFn)) {
+        log("Function name already exists.", "err");
+        renderFnUi();
+        return;
+      }
+      const old = state.activeFn;
+      const f = getFn(old);
+      f.name = newName;
+      state.activeFn = newName;
+      // update Call shapes across all functions
+      state.functions.forEach((fn) => {
+        fn.nodes.forEach((n) => {
+          if (n.type === "call" && n.props.name === old) n.props.name = newName;
+        });
+      });
+      renderFnUi();
+      render();
+    }
+
+    function addFunction() {
+      flushActive();
+      let base = "Function";
+      let i = 1;
+      while (getFn(base + i)) i++;
+      const name = base + i;
+      const fn = blankFunction(name, "Integer", [{ name: "x", typeName: "Integer" }]);
+      state.functions.push(fn);
+      state.activeFn = name;
+      loadActive();
+      renderFnUi();
+      render();
+      renderInspector();
+      log("Added function " + name, "sys");
+    }
+
+    function deleteFunction() {
+      if (state.activeFn === "Main") return;
+      const name = state.activeFn;
+      flushActive();
+      state.functions = state.functions.filter((f) => f.name !== name);
+      state.activeFn = "Main";
+      loadActive();
+      renderFnUi();
+      render();
+      renderInspector();
+      log("Deleted function " + name, "sys");
+    }
+
+    function parseArgList(text) {
+      // split on commas not inside quotes
+      const out = [];
+      let cur = "";
+      let q = null;
+      for (let i = 0; i < String(text || "").length; i++) {
+        const c = text[i];
+        if (q) {
+          cur += c;
+          if (c === q) q = null;
+          continue;
+        }
+        if (c === '"' || c === "'") { q = c; cur += c; continue; }
+        if (c === ",") { out.push(cur.trim()); cur = ""; continue; }
+        cur += c;
+      }
+      if (cur.trim()) out.push(cur.trim());
+      return out;
+    }
 
     function uid() {
       return "n" + (state.idSeq++);
@@ -806,7 +1014,8 @@ const HTML = `<!DOCTYPE html>
         case "for": return { variable: "i", start: "1", end: "10", step: "1" };
         case "comment": return { text: "Comment" };
         case "breakpoint": return {};
-        case "call": return { name: "MyFunction" };
+        case "call": return { name: "Double", args: "n", result: "" };
+        case "end": return { expression: "" };
         default: return {};
       }
     }
@@ -814,8 +1023,12 @@ const HTML = `<!DOCTYPE html>
     function nodeLabel(n) {
       const p = n.props || {};
       switch (n.type) {
-        case "start": return "Start";
-        case "end": return "End";
+        case "start": return state.activeFn === "Main" ? "Start" : state.activeFn;
+        case "end": {
+          const fn = getFn(state.activeFn);
+          if (fn && fn.returnType !== "None" && p.expression) return "Return " + p.expression;
+          return "End";
+        }
         case "declare": return p.isArray ? \`\${p.typeName} \${p.name}[\${p.size || "?"}]\` : \`\${p.typeName} \${p.name}\`;
         case "input": return \`Input \${p.variable}\`;
         case "output": return \`Output \${p.expression}\`;
@@ -826,7 +1039,10 @@ const HTML = `<!DOCTYPE html>
         case "for": return \`For \${p.variable} = \${p.start} to \${p.end}\`;
         case "comment": return p.text || "Comment";
         case "breakpoint": return "●";
-        case "call": return \`Call \${p.name || "?"}\`;
+        case "call": {
+          const call = \`\${p.name || "?"}(\${p.args || ""})\`;
+          return p.result ? \`\${p.result} = \${call}\` : \`Call \${call}\`;
+        }
         default: return n.type;
       }
     }
@@ -1310,6 +1526,21 @@ const HTML = `<!DOCTYPE html>
         fields += field("text", "Text", p.text || "");
       } else if (n.type === "breakpoint") {
         fields += '<p class="empty-state">Pauses Run until you Step/Run again.</p>';
+      } else if (n.type === "call") {
+        const names = state.functions.map((f) => f.name).filter((n) => n !== "Main");
+        if (!names.length) names.push("Double");
+        fields += select("name", "Function", p.name || names[0], names);
+        fields += field("args", "Arguments", p.args || "");
+        fields += field("result", "Store result in", p.result || "");
+      } else if (n.type === "end") {
+        const fn = getFn(state.activeFn);
+        if (fn && fn.returnType !== "None") {
+          fields += field("expression", "Return expression", p.expression || "");
+        } else {
+          fields += '<p class="empty-state">End of function.</p>';
+        }
+      } else if (n.type === "start") {
+        fields += '<p class="empty-state">Function entry. Edit details in Functions panel.</p>';
       } else {
         fields += '<p class="empty-state">No editable properties.</p>';
       }
@@ -1544,132 +1775,199 @@ const HTML = `<!DOCTYPE html>
 
     async function runProgram(stepMode = false) {
       if (state.running) return;
-      const start = state.nodes.find((n) => n.type === "start");
-      if (!start) {
-        log("Add a Start shape first.", "err");
+      flushActive();
+      const main = getFn("Main");
+      if (!main || !main.nodes.some((n) => n.type === "start")) {
+        log("Main function needs a Start shape.", "err");
         return;
       }
+
+      const viewFn = state.activeFn;
       state.running = true;
       state.stepMode = stepMode;
-      state.vars = Object.create(null);
-      const declared = Object.create(null);
       btnRun.disabled = true;
       btnStop.disabled = false;
       log("— Run started —", "sys");
-      showVars();
 
-      let current = start;
-      const loopStack = [];
-      let steps = 0;
+      const chartStack = [];
 
-      try {
-        while (current && state.running) {
-          if (++steps > 10000) throw new Error("Too many steps (possible infinite loop)");
-          state.highlightId = current.id;
-          render();
-          await waitStep();
-          if (!state.running) break;
+      function enterFnChart(fnDef) {
+        chartStack.push({
+          nodes: state.nodes,
+          edges: state.edges,
+          activeFn: state.activeFn,
+          pan: { x: state.pan.x, y: state.pan.y },
+        });
+        state.nodes = fnDef.nodes;
+        state.edges = fnDef.edges;
+        state.activeFn = fnDef.name;
+        state.pan = fnDef.pan ? { x: fnDef.pan.x, y: fnDef.pan.y } : state.pan;
+        renderFnUi();
+      }
 
-          const n = current;
-          let branch = "next";
+      function leaveFnChart() {
+        const prev = chartStack.pop();
+        if (!prev) return;
+        state.nodes = prev.nodes;
+        state.edges = prev.edges;
+        state.activeFn = prev.activeFn;
+        state.pan = prev.pan;
+        renderFnUi();
+      }
 
-          if (n.type === "start") {
-            // fall through
-          } else if (n.type === "end") {
-            break;
-          } else if (n.type === "declare") {
-            const { name, typeName, isArray, size } = n.props;
-            declared[name] = typeName;
-            if (isArray) {
-              const len = Number(evalExpr(size || "0", state.vars));
-              state.vars[name] = Array.from({ length: len }, () =>
-                typeName === "String" ? "" : typeName === "Boolean" ? false : 0
-              );
-            } else {
-              state.vars[name] = typeName === "String" ? "" : typeName === "Boolean" ? false : 0;
-            }
-          } else if (n.type === "assign") {
-            state.vars[n.props.variable] = evalExpr(n.props.expression, state.vars);
-          } else if (n.type === "output") {
-            const val = evalExpr(n.props.expression, state.vars);
-            log(String(val), "out");
-          } else if (n.type === "input") {
-            const raw = await askInput("Enter " + n.props.variable + ":");
-            if (!state.running) break;
-            const t = declared[n.props.variable] || "String";
-            state.vars[n.props.variable] = coerce(t, raw);
-          } else if (n.type === "comment") {
-            // documentation only
-          } else if (n.type === "breakpoint") {
-            log("Breakpoint hit — click Step or Run to continue.", "sys");
-            state.stepMode = true;
+      async function executeFn(fnName, argText, callerVars) {
+        const fnDef = getFn(fnName);
+        if (!fnDef) throw new Error("Unknown function: " + fnName);
+
+        const argExprs = parseArgList(argText);
+        if (argExprs.length !== fnDef.parameters.length) {
+          throw new Error(
+            fnName + " expects " + fnDef.parameters.length + " argument(s), got " + argExprs.length
+          );
+        }
+        const argVals = argExprs.map((ex) => evalExpr(ex, callerVars));
+
+        const localVars = Object.create(null);
+        const declared = Object.create(null);
+        fnDef.parameters.forEach((p, i) => {
+          declared[p.name] = p.typeName;
+          localVars[p.name] = argVals[i];
+        });
+
+        enterFnChart(fnDef);
+        const prevVars = state.vars;
+        state.vars = localVars;
+        showVars();
+
+        let current = fnDef.nodes.find((n) => n.type === "start");
+        const loopStack = [];
+        let steps = 0;
+        let returnValue;
+
+        try {
+          while (current && state.running) {
+            if (++steps > 10000) throw new Error("Too many steps (possible infinite loop)");
+            state.highlightId = current.id;
+            render();
             await waitStep();
             if (!state.running) break;
-          } else if (n.type === "if") {
-            branch = evalExpr(n.props.condition, state.vars) ? "true" : "false";
-          } else if (n.type === "while" || n.type === "do") {
-            const ok = !!evalExpr(n.props.condition, state.vars);
-            if (ok) {
-              loopStack.push({ type: n.type, nodeId: n.id });
-              branch = "true";
-            } else {
-              branch = "false";
-            }
-          } else if (n.type === "for") {
-            const { variable, start: st, end, step } = n.props;
-            if (!n._forInit) {
-              state.vars[variable] = evalExpr(st, state.vars);
-              n._forInit = true;
-            }
-            const i = state.vars[variable];
-            const endV = evalExpr(end, state.vars);
-            const stepV = evalExpr(step || "1", state.vars);
-            const cont = stepV >= 0 ? i <= endV : i >= endV;
-            if (cont) {
-              loopStack.push({ type: "for", nodeId: n.id, stepV });
-              branch = "true";
-            } else {
-              n._forInit = false;
-              branch = "false";
-            }
-          }
 
-          showVars();
+            const n = current;
+            let branch = "next";
 
-          // after body of loops, return to loop header
-          if (n.type !== "while" && n.type !== "do" && n.type !== "for" && n.type !== "if") {
-            const edge = nextEdge(n.id, "next");
-            if (!edge && loopStack.length) {
-              const frame = loopStack.pop();
-              const header = findNode(frame.nodeId);
-              if (frame.type === "for") {
-                state.vars[header.props.variable] =
-                  Number(state.vars[header.props.variable]) + Number(frame.stepV);
+            if (n.type === "start") {
+              // fall through
+            } else if (n.type === "end") {
+              if (fnDef.returnType !== "None") {
+                returnValue = n.props.expression
+                  ? evalExpr(n.props.expression, state.vars)
+                  : 0;
               }
-              current = header;
-              continue;
+              break;
+            } else if (n.type === "declare") {
+              const { name, typeName, isArray, size } = n.props;
+              declared[name] = typeName;
+              if (isArray) {
+                const len = Number(evalExpr(size || "0", state.vars));
+                state.vars[name] = Array.from({ length: len }, () =>
+                  typeName === "String" ? "" : typeName === "Boolean" ? false : 0
+                );
+              } else {
+                state.vars[name] = typeName === "String" ? "" : typeName === "Boolean" ? false : 0;
+              }
+            } else if (n.type === "assign") {
+              state.vars[n.props.variable] = evalExpr(n.props.expression, state.vars);
+            } else if (n.type === "output") {
+              const val = evalExpr(n.props.expression, state.vars);
+              log(String(val), "out");
+            } else if (n.type === "input") {
+              const raw = await askInput("Enter " + n.props.variable + ":");
+              if (!state.running) break;
+              const t = declared[n.props.variable] || "String";
+              state.vars[n.props.variable] = coerce(t, raw);
+            } else if (n.type === "comment") {
+              // skip
+            } else if (n.type === "breakpoint") {
+              log("Breakpoint hit — click Step or Run to continue.", "sys");
+              state.stepMode = true;
+              await waitStep();
+              if (!state.running) break;
+            } else if (n.type === "call") {
+              const ret = await executeFn(n.props.name, n.props.args || "", state.vars);
+              if (n.props.result) {
+                state.vars[n.props.result] = ret;
+                declared[n.props.result] = declared[n.props.result] || "Integer";
+              }
+            } else if (n.type === "if") {
+              branch = evalExpr(n.props.condition, state.vars) ? "true" : "false";
+            } else if (n.type === "while" || n.type === "do") {
+              const ok = !!evalExpr(n.props.condition, state.vars);
+              if (ok) {
+                loopStack.push({ type: n.type, nodeId: n.id });
+                branch = "true";
+              } else {
+                branch = "false";
+              }
+            } else if (n.type === "for") {
+              const { variable, start: st, end, step } = n.props;
+              if (!n._forInit) {
+                state.vars[variable] = evalExpr(st, state.vars);
+                n._forInit = true;
+              }
+              const i = state.vars[variable];
+              const endV = evalExpr(end, state.vars);
+              const stepV = evalExpr(step || "1", state.vars);
+              const cont = stepV >= 0 ? i <= endV : i >= endV;
+              if (cont) {
+                loopStack.push({ type: "for", nodeId: n.id, stepV });
+                branch = "true";
+              } else {
+                n._forInit = false;
+                branch = "false";
+              }
             }
-            current = edge ? findNode(edge.to) : null;
-          } else if (n.type === "if") {
-            const edge = nextEdge(n.id, branch);
-            current = edge ? findNode(edge.to) : null;
-          } else {
-            // while / do / for
-            const edge = nextEdge(n.id, branch);
-            if (branch === "false") {
-              // leave loop
+
+            showVars();
+
+            if (n.type !== "while" && n.type !== "do" && n.type !== "for" && n.type !== "if") {
+              const edge = nextEdge(n.id, "next");
+              if (!edge && loopStack.length) {
+                const frame = loopStack.pop();
+                const header = findNode(frame.nodeId);
+                if (frame.type === "for") {
+                  state.vars[header.props.variable] =
+                    Number(state.vars[header.props.variable]) + Number(frame.stepV);
+                }
+                current = header;
+                continue;
+              }
+              current = edge ? findNode(edge.to) : null;
+            } else if (n.type === "if") {
+              const edge = nextEdge(n.id, branch);
               current = edge ? findNode(edge.to) : null;
             } else {
+              const edge = nextEdge(n.id, branch);
               current = edge ? findNode(edge.to) : null;
-              if (!current) throw new Error(n.type + " has no true/body branch");
+              if (branch === "true" && !current) throw new Error(n.type + " has no true/body branch");
             }
           }
+        } finally {
+          fnDef.nodes.forEach((n) => { delete n._forInit; });
+          state.vars = prevVars;
+          leaveFnChart();
+          showVars();
         }
+
+        return returnValue;
+      }
+
+      try {
+        state.vars = Object.create(null);
+        await executeFn("Main", "", state.vars);
         log("— Run finished —", "sys");
       } catch (err) {
         log("Error: " + err.message, "err");
       } finally {
-        state.nodes.forEach((n) => { delete n._forInit; });
         state.running = false;
         state.highlightId = null;
         state.stepResolve = null;
@@ -1678,6 +1976,9 @@ const HTML = `<!DOCTYPE html>
         btnSubmit.disabled = true;
         btnRun.disabled = false;
         btnStop.disabled = true;
+        state.activeFn = viewFn;
+        loadActive();
+        renderFnUi();
         render();
         showVars();
       }
@@ -1694,55 +1995,79 @@ const HTML = `<!DOCTYPE html>
     }
 
     function newProgram() {
-      state.nodes = [];
-      state.edges = [];
-      state.selectedId = null;
-      state.linkFrom = null;
-      state.idSeq = 1;
-      const s = makeNode("start", 260, 36);
-      const e = makeNode("end", 260, 220);
-      state.nodes = [s, e];
-      state.edges = [{ from: s.id, to: e.id, branch: "next" }];
+      state.functions = [blankFunction("Main")];
+      state.activeFn = "Main";
+      loadActive();
+      renderFnUi();
       render();
       renderInspector();
       log("New program.", "sys");
     }
 
     function loadExample() {
-      state.nodes = [];
-      state.edges = [];
+      // Main: input n, call Double(n) -> r, output r
       state.idSeq = 1;
-      const start = makeNode("start", 260, 24);
-      const decl = makeNode("declare", 250, 100, { name: "n", typeName: "Integer", isArray: false, size: "" });
-      const inp = makeNode("input", 250, 180, { variable: "n" });
-      const iff = makeNode("if", 245, 270, { condition: "n % 2 == 0" });
-      const even = makeNode("output", 40, 400, { expression: '"Even"' });
-      const odd = makeNode("output", 460, 400, { expression: '"Odd"' });
-      const end = makeNode("end", 260, 520);
-      state.nodes = [start, decl, inp, iff, even, odd, end];
-      state.edges = [
-        { from: start.id, to: decl.id, branch: "next" },
-        { from: decl.id, to: inp.id, branch: "next" },
-        { from: inp.id, to: iff.id, branch: "next" },
-        { from: iff.id, to: even.id, branch: "true" },
-        { from: iff.id, to: odd.id, branch: "false" },
-        { from: even.id, to: end.id, branch: "next" },
-        { from: odd.id, to: end.id, branch: "next" },
-      ];
-      state.selectedId = null;
-      state.pan = { x: 40, y: 16 };
+      const mainStart = makeNode("start", 260, 24);
+      const dN = makeNode("declare", 250, 100, { name: "n", typeName: "Integer", isArray: false, size: "" });
+      const dR = makeNode("declare", 250, 180, { name: "r", typeName: "Integer", isArray: false, size: "" });
+      const inp = makeNode("input", 250, 260, { variable: "n" });
+      const call = makeNode("call", 250, 340, { name: "Double", args: "n", result: "r" });
+      const out = makeNode("output", 250, 420, { expression: "r" });
+      const mainEnd = makeNode("end", 260, 500, { expression: "" });
+      const main = {
+        name: "Main",
+        returnType: "None",
+        parameters: [],
+        nodes: [mainStart, dN, dR, inp, call, out, mainEnd],
+        edges: [
+          { from: mainStart.id, to: dN.id, branch: "next" },
+          { from: dN.id, to: dR.id, branch: "next" },
+          { from: dR.id, to: inp.id, branch: "next" },
+          { from: inp.id, to: call.id, branch: "next" },
+          { from: call.id, to: out.id, branch: "next" },
+          { from: out.id, to: mainEnd.id, branch: "next" },
+        ],
+        idSeq: state.idSeq,
+        pan: { x: 40, y: 16 },
+      };
+
+      state.idSeq = 1;
+      const dStart = makeNode("start", 260, 24);
+      const dEnd = makeNode("end", 250, 160, { expression: "x * 2" });
+      const dbl = {
+        name: "Double",
+        returnType: "Integer",
+        parameters: [{ name: "x", typeName: "Integer" }],
+        nodes: [dStart, dEnd],
+        edges: [{ from: dStart.id, to: dEnd.id, branch: "next" }],
+        idSeq: state.idSeq,
+        pan: { x: 80, y: 28 },
+      };
+
+      state.functions = [main, dbl];
+      state.activeFn = "Main";
+      loadActive();
+      renderFnUi();
       render();
       renderInspector();
-      log("Loaded even/odd example (Flowgorithm-style chart).", "sys");
+      log("Loaded function example: Main calls Double(n).", "sys");
     }
 
     function saveProgram() {
+      flushActive();
       const data = {
         format: "flowgorithm-web",
-        version: 1,
-        nodes: state.nodes.map(({ id, type, x, y, w, h, props }) => ({ id, type, x, y, w, h, props })),
-        edges: state.edges,
-        idSeq: state.idSeq,
+        version: 2,
+        activeFn: state.activeFn,
+        functions: state.functions.map((f) => ({
+          name: f.name,
+          returnType: f.returnType,
+          parameters: f.parameters,
+          nodes: f.nodes.map(({ id, type, x, y, w, h, props }) => ({ id, type, x, y, w, h, props })),
+          edges: f.edges,
+          idSeq: f.idSeq,
+          pan: f.pan,
+        })),
       };
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
       const a = document.createElement("a");
@@ -1761,10 +2086,24 @@ const HTML = `<!DOCTYPE html>
             importFprg(text);
           } else {
             const data = JSON.parse(text);
-            state.nodes = data.nodes || [];
-            state.edges = data.edges || [];
-            state.idSeq = data.idSeq || (state.nodes.length + 1);
-            state.selectedId = null;
+            if (data.functions && Array.isArray(data.functions)) {
+              state.functions = data.functions;
+              state.activeFn = data.activeFn || "Main";
+            } else {
+              // legacy single-chart files
+              state.functions = [{
+                name: "Main",
+                returnType: "None",
+                parameters: [],
+                nodes: data.nodes || [],
+                edges: data.edges || [],
+                idSeq: data.idSeq || 1,
+                pan: { x: 40, y: 16 },
+              }];
+              state.activeFn = "Main";
+            }
+            loadActive();
+            renderFnUi();
             render();
             renderInspector();
             log("Opened " + file.name, "sys");
@@ -1834,13 +2173,28 @@ const HTML = `<!DOCTYPE html>
       }
 
       body.forEach(addFromEl);
-      const end = makeNode("end", 260, y);
+      const end = makeNode("end", 260, y, { expression: "" });
       state.nodes.push(end);
       link(prev, end);
+      state.functions = [{
+        name: "Main",
+        returnType: "None",
+        parameters: [],
+        nodes: state.nodes,
+        edges: state.edges,
+        idSeq: state.idSeq,
+        pan: { x: 40, y: 16 },
+      }];
+      state.activeFn = "Main";
+      renderFnUi();
       render();
       renderInspector();
       log("Imported .fprg (linear Main body).", "sys");
     }
+
+    fnSelect.addEventListener("change", () => switchFunction(fnSelect.value));
+    document.getElementById("btn-fn-add").addEventListener("click", addFunction);
+    document.getElementById("btn-fn-del").addEventListener("click", deleteFunction);
 
     // palette removed — insert shapes by clicking connector arrows (+)
 

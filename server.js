@@ -117,8 +117,25 @@ const HTML = `<!DOCTYPE html>
     }
     button.primary:hover { background: linear-gradient(135deg, #3dccb9, #2eb8a6); }
     button.warn { background: #3a2a18; color: #ffd27a; }
-    button.ghost { background: transparent; border-color: var(--line); color: var(--muted); }
-    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    button.ghost,
+    .file-btn.ghost {
+      background: transparent;
+      border-color: var(--line);
+      color: var(--muted);
+    }
+    button:disabled,
+    .file-btn:disabled,
+    button[disabled] {
+      opacity: 0.4;
+      cursor: not-allowed;
+      filter: grayscale(0.35);
+    }
+    button.warn:disabled {
+      background: var(--panel-2);
+      color: var(--muted);
+      filter: none;
+      opacity: 0.45;
+    }
 
     .file-btn { display: inline-flex; align-items: center; }
     .file-btn input { display: none; }
@@ -311,10 +328,10 @@ const HTML = `<!DOCTYPE html>
     <div class="toolbar">
       <button type="button" class="primary" id="btn-run">Run</button>
       <button type="button" class="warn" id="btn-stop" disabled>Stop</button>
-      <button type="button" id="btn-step">Step</button>
+      <button type="button" class="ghost" id="btn-step">Step</button>
       <button type="button" class="ghost" id="btn-new">New</button>
       <button type="button" class="ghost" id="btn-example">Example</button>
-      <label class="file-btn ghost">Open<input type="file" id="file-open" accept=".json,.fprg,application/json,text/xml" /></label>
+      <label class="file-btn ghost" id="btn-open">Open<input type="file" id="file-open" accept=".json,.fprg,application/json,text/xml" /></label>
       <button type="button" class="ghost" id="btn-save">Save</button>
       <button type="button" class="ghost" id="btn-delete" title="Delete selected">Delete</button>
     </div>

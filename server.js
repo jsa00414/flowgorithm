@@ -14,7 +14,7 @@ const HTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Flowgorithm</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -38,12 +38,23 @@ const HTML = `<!DOCTYPE html>
       --shadow: 0 18px 40px rgba(0, 0, 0, 0.35);
       --font: "Figtree", sans-serif;
       --mono: "IBM Plex Mono", monospace;
+      --app-height: 100dvh;
     }
 
     * { box-sizing: border-box; }
+    html {
+      -webkit-text-size-adjust: 100%;
+      text-size-adjust: 100%;
+    }
     html, body {
       margin: 0;
-      height: 100%;
+      width: 100%;
+      max-width: 100%;
+      height: var(--app-height);
+      max-height: var(--app-height);
+      overflow: hidden;
+      overscroll-behavior: none;
+      touch-action: manipulation;
       font-family: var(--font);
       color: var(--text);
       background:
@@ -54,8 +65,8 @@ const HTML = `<!DOCTYPE html>
 
     body {
       display: grid;
-      grid-template-rows: auto 1fr;
-      min-height: 100%;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
     }
 
     header.app-bar {
@@ -66,24 +77,29 @@ const HTML = `<!DOCTYPE html>
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
       background: rgba(15, 28, 36, 0.72);
+      min-width: 0;
+      flex-shrink: 0;
     }
 
     .brand {
       display: flex;
       align-items: baseline;
       gap: 0.55rem;
-      min-width: 10rem;
+      min-width: 0;
+      flex-shrink: 1;
     }
     .brand h1 {
       margin: 0;
       font-size: 1.35rem;
       font-weight: 700;
       letter-spacing: -0.02em;
+      white-space: nowrap;
     }
     .brand span {
       color: var(--muted);
       font-size: 0.78rem;
       font-weight: 500;
+      white-space: nowrap;
     }
 
     .toolbar {
@@ -92,6 +108,7 @@ const HTML = `<!DOCTYPE html>
       gap: 0.4rem;
       align-items: center;
       flex: 1;
+      min-width: 0;
     }
 
     button, .file-btn {
@@ -142,8 +159,11 @@ const HTML = `<!DOCTYPE html>
 
     main {
       display: grid;
-      grid-template-columns: 210px 1fr 300px;
+      grid-template-columns: 210px minmax(0, 1fr) 300px;
       min-height: 0;
+      min-width: 0;
+      height: 100%;
+      overflow: hidden;
       gap: 0;
     }
 
@@ -152,12 +172,14 @@ const HTML = `<!DOCTYPE html>
       border-right: 1px solid rgba(255,255,255,0.05);
       padding: 1rem;
       overflow: auto;
+      min-height: 0;
+      min-width: 0;
     }
     .side {
       border-right: none;
       border-left: 1px solid rgba(255,255,255,0.05);
       display: grid;
-      grid-template-rows: auto 1fr auto;
+      grid-template-rows: auto minmax(0, 1fr) auto;
       gap: 0.85rem;
     }
 
@@ -204,6 +226,8 @@ const HTML = `<!DOCTYPE html>
     .workspace {
       position: relative;
       min-height: 0;
+      min-width: 0;
+      height: 100%;
       overflow: hidden;
       background:
         linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
@@ -215,9 +239,13 @@ const HTML = `<!DOCTYPE html>
     #canvas {
       width: 100%;
       height: 100%;
+      max-width: 100%;
+      max-height: 100%;
       display: block;
       cursor: grab;
       touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
     }
     #canvas.dragging { cursor: grabbing; }
 
@@ -246,8 +274,9 @@ const HTML = `<!DOCTYPE html>
 
     .console-wrap {
       display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: 220px;
+      grid-template-rows: auto minmax(0, 1fr) auto;
+      min-height: 160px;
+      max-height: 100%;
       border-top: 1px solid rgba(255,255,255,0.06);
       background: #101c23;
       border-radius: 0.65rem;
@@ -307,17 +336,65 @@ const HTML = `<!DOCTYPE html>
     }
 
     @media (max-width: 980px) {
+      header.app-bar {
+        flex-wrap: wrap;
+        padding: 0.65rem 0.85rem;
+        gap: 0.55rem;
+      }
+      .brand span { display: none; }
+      .brand h1 { font-size: 1.15rem; }
       main {
         grid-template-columns: 1fr;
-        grid-template-rows: auto 48vh auto;
+        grid-template-rows: auto minmax(0, 1fr) minmax(160px, 36%);
+        overflow: hidden;
       }
       aside, .side {
         border: none;
         border-bottom: 1px solid rgba(255,255,255,0.05);
       }
-      .palette { grid-template-columns: repeat(2, 1fr); }
+      aside {
+        max-height: 8.75rem;
+        padding: 0.65rem 0.85rem;
+      }
+      .side {
+        padding: 0.65rem 0.85rem;
+        grid-template-rows: auto auto minmax(0, 1fr);
+      }
+      .palette { grid-template-columns: repeat(3, 1fr); }
+      .hint { display: none; }
+      .console-wrap { min-height: 120px; }
+      .vars { min-height: 2.5rem; }
+      /* Keep iOS from zooming/stretching the page on focus */
+      .inspector input,
+      .inspector select,
+      .inspector textarea,
+      .prompt-row input,
+      button,
+      .file-btn {
+        font-size: 16px;
+      }
+    }
+
+    @supports not (height: 100dvh) {
+      :root { --app-height: 100vh; }
     }
   </style>
+  <script>
+    /* Keep layout locked to the visible viewport (mobile browser chrome). */
+    (function () {
+      function setAppHeight() {
+        var h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty("--app-height", h + "px");
+      }
+      setAppHeight();
+      window.addEventListener("resize", setAppHeight);
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener("resize", setAppHeight);
+        window.visualViewport.addEventListener("scroll", setAppHeight);
+      }
+      document.addEventListener("gesturestart", function (e) { e.preventDefault(); }, { passive: false });
+    })();
+  </script>
 </head>
 <body>
   <header class="app-bar">

@@ -179,8 +179,14 @@ const HTML = `<!DOCTYPE html>
       border-right: none;
       border-left: 1px solid rgba(255,255,255,0.05);
       display: grid;
-      grid-template-rows: auto minmax(0, 1fr) auto;
-      gap: 0.85rem;
+      /* Inspector + Variables stay compact; Console takes leftover space */
+      grid-template-rows: auto auto minmax(0, 1fr);
+      gap: 0.65rem;
+      align-content: start;
+    }
+    .side > div {
+      min-width: 0;
+      min-height: 0;
     }
 
     h2 {
@@ -275,7 +281,8 @@ const HTML = `<!DOCTYPE html>
     .console-wrap {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr) auto;
-      min-height: 160px;
+      min-height: 0;
+      height: 100%;
       max-height: 100%;
       border-top: 1px solid rgba(255,255,255,0.06);
       background: #101c23;
@@ -308,13 +315,15 @@ const HTML = `<!DOCTYPE html>
     #console .out { color: #9be7d8; }
     #console .sys { color: #8aa3af; }
     .prompt-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
+      display: flex;
       gap: 0.35rem;
+      align-items: center;
       padding: 0.45rem;
       border-top: 1px solid rgba(255,255,255,0.06);
     }
     .prompt-row input {
+      flex: 1;
+      min-width: 0;
       font-family: var(--mono);
       font-size: 0.8rem;
       color: var(--text);
@@ -323,16 +332,27 @@ const HTML = `<!DOCTYPE html>
       border-radius: 0.4rem;
       padding: 0.45rem 0.55rem;
     }
+    .prompt-row button {
+      flex-shrink: 0;
+      white-space: nowrap;
+    }
 
     .vars {
       font-family: var(--mono);
       font-size: 0.78rem;
       background: #101c23;
       border-radius: 0.65rem;
-      padding: 0.65rem;
-      min-height: 4.5rem;
+      padding: 0.55rem 0.65rem;
+      min-height: 2.25rem;
+      max-height: 5.5rem;
+      overflow: auto;
       color: #c9dde5;
       white-space: pre-wrap;
+    }
+
+    .inspector .hint {
+      margin-top: 0.45rem;
+      font-size: 0.72rem;
     }
 
     @media (max-width: 980px) {
@@ -345,7 +365,7 @@ const HTML = `<!DOCTYPE html>
       .brand h1 { font-size: 1.15rem; }
       main {
         grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(0, 1fr) minmax(160px, 36%);
+        grid-template-rows: auto minmax(0, 1fr) minmax(0, 32%);
         overflow: hidden;
       }
       aside, .side {
@@ -353,17 +373,27 @@ const HTML = `<!DOCTYPE html>
         border-bottom: 1px solid rgba(255,255,255,0.05);
       }
       aside {
-        max-height: 8.75rem;
+        max-height: 7.5rem;
         padding: 0.65rem 0.85rem;
       }
       .side {
-        padding: 0.65rem 0.85rem;
+        padding: 0.55rem 0.85rem;
         grid-template-rows: auto auto minmax(0, 1fr);
+        overflow: auto;
+        max-height: 100%;
       }
       .palette { grid-template-columns: repeat(3, 1fr); }
-      .hint { display: none; }
-      .console-wrap { min-height: 120px; }
-      .vars { min-height: 2.5rem; }
+      .hint,
+      .inspector .hint { display: none; }
+      .console-wrap {
+        min-height: 0;
+        height: auto;
+        max-height: none;
+      }
+      .vars {
+        min-height: 1.75rem;
+        max-height: 3.5rem;
+      }
       /* Keep iOS from zooming/stretching the page on focus */
       .inspector input,
       .inspector select,

@@ -76,9 +76,10 @@ const HTML = `<!DOCTYPE html>
       padding: 0.85rem 1.25rem;
       border-bottom: 1px solid rgba(255,255,255,0.06);
       backdrop-filter: blur(10px);
-      background: rgba(15, 28, 36, 0.72);
+      background: rgba(15, 28, 36, 0.92);
       min-width: 0;
       flex-shrink: 0;
+      z-index: 40;
     }
 
     .brand {
@@ -109,6 +110,77 @@ const HTML = `<!DOCTYPE html>
       align-items: center;
       flex: 1;
       min-width: 0;
+    }
+
+    /* Desktop: fixed vertical topbar (left rail) */
+    @media (min-width: 981px) {
+      body {
+        grid-template-columns: 92px minmax(0, 1fr);
+        grid-template-rows: minmax(0, 1fr);
+      }
+
+      header.app-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 92px;
+        height: var(--app-height);
+        max-height: var(--app-height);
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-start;
+        gap: 0.85rem;
+        padding: 1rem 0.55rem;
+        border-bottom: none;
+        border-right: 1px solid rgba(255,255,255,0.06);
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+      }
+
+      .brand {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        gap: 0.15rem;
+        flex-shrink: 0;
+      }
+      .brand h1 {
+        font-size: 0.78rem;
+        letter-spacing: 0.02em;
+        white-space: normal;
+        line-height: 1.15;
+        writing-mode: horizontal-tb;
+      }
+      .brand span {
+        display: none;
+      }
+
+      .toolbar {
+        flex-direction: column;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        flex: 1;
+        gap: 0.35rem;
+        width: 100%;
+      }
+
+      .toolbar button,
+      .toolbar .file-btn {
+        width: 100%;
+        justify-content: center;
+        text-align: center;
+        padding: 0.55rem 0.35rem;
+        font-size: 0.72rem;
+      }
+
+      main {
+        grid-column: 2;
+        grid-row: 1;
+        height: var(--app-height);
+        max-height: var(--app-height);
+      }
     }
 
     button, .file-btn {

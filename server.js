@@ -1176,13 +1176,6 @@ const HTML = `<!DOCTYPE html>
       return \`M \${x1} \${y1} L \${x1} \${midY} L \${x2} \${midY} L \${x2} \${y2}\`;
     }
 
-    function edgeMidpoint(start, end, branch) {
-      if (branch === "true" || branch === "false") {
-        return { x: (start.x + end.x) / 2, y: start.y + Math.max(18, (end.y - start.y) * 0.35) };
-      }
-      return { x: (start.x + end.x) / 2, y: start.y + Math.max(24, (end.y - start.y) / 2) };
-    }
-
     const addMenu = document.getElementById("add-menu");
     const addBackdrop = document.getElementById("add-backdrop");
 
@@ -1339,29 +1332,6 @@ const HTML = `<!DOCTYPE html>
         hit.addEventListener("mouseleave", () => path.setAttribute("stroke-width", "2"));
         root.appendChild(hit);
         root.appendChild(path);
-
-        // Midpoint + glyph for discoverability
-        const mid = edgeMidpoint(start, end, e.branch);
-        const plus = document.createElementNS(ns, "circle");
-        plus.setAttribute("cx", mid.x);
-        plus.setAttribute("cy", mid.y);
-        plus.setAttribute("r", "7");
-        plus.setAttribute("fill", "#ffffff");
-        plus.setAttribute("stroke", stroke);
-        plus.setAttribute("stroke-width", "1.6");
-        plus.style.pointerEvents = "none";
-        root.appendChild(plus);
-        const plusText = document.createElementNS(ns, "text");
-        plusText.setAttribute("x", mid.x);
-        plusText.setAttribute("y", mid.y + 3.5);
-        plusText.setAttribute("text-anchor", "middle");
-        plusText.setAttribute("font-size", "11");
-        plusText.setAttribute("font-weight", "700");
-        plusText.setAttribute("fill", stroke);
-        plusText.setAttribute("font-family", "Figtree, sans-serif");
-        plusText.style.pointerEvents = "none";
-        plusText.textContent = "+";
-        root.appendChild(plusText);
 
         if (e.branch === "true" || e.branch === "false") {
           const label = document.createElementNS(ns, "text");

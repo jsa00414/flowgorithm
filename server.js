@@ -285,14 +285,15 @@ const HTML = `<!DOCTYPE html>
     .swatch {
       width: 12px;
       height: 12px;
-      border-radius: 3px;
+      border-radius: 2px;
+      border: 1px solid rgba(0,0,0,0.25);
     }
-    .swatch.start { background: var(--terminal); }
-    .swatch.declare { background: #7dd3fc; }
-    .swatch.assign { background: var(--process); }
-    .swatch.input, .swatch.output { background: var(--io); }
-    .swatch.if, .swatch.while, .swatch.for { background: var(--decide); }
-    .swatch.end { background: var(--danger); }
+    .swatch.start { background: #c6efce; }
+    .swatch.declare { background: #ffffff; }
+    .swatch.assign { background: #ffffff; }
+    .swatch.input, .swatch.output { background: #bdd7ee; }
+    .swatch.if, .swatch.while, .swatch.for { background: #ffe699; }
+    .swatch.end { background: #c6efce; }
 
     .hint {
       margin-top: 1rem;
@@ -307,11 +308,13 @@ const HTML = `<!DOCTYPE html>
       min-width: 0;
       height: 100%;
       overflow: hidden;
-      background:
-        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
-      background-size: 28px 28px;
-      background-color: rgba(10, 20, 26, 0.55);
+      /* Classic Flowgorithm chart surface */
+      background-color: #eceff3;
+      background-image:
+        linear-gradient(rgba(60, 80, 100, 0.07) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(60, 80, 100, 0.07) 1px, transparent 1px);
+      background-size: 24px 24px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06);
     }
 
     #canvas {
@@ -521,9 +524,9 @@ const HTML = `<!DOCTYPE html>
       <h2>Shapes</h2>
       <div class="palette" id="palette"></div>
       <p class="hint">
-        Click a shape to add it. Drag on the canvas to pan.
-        Click a node, then another, to connect True/next / False branches.
-        Double-click a node to edit quickly.
+        Click a shape to add it. Drag the chart to pan.
+        Shift-click two shapes to link. For If/While/For:
+        target on the left = True, right = False.
       </p>
     </aside>
 
@@ -570,16 +573,38 @@ const HTML = `<!DOCTYPE html>
       { type: "end", label: "End", once: true },
     ];
 
-    const COLORS = {
-      start: "#9b8cff",
-      end: "#e85d5d",
-      declare: "#7dd3fc",
-      assign: "#5ad4c0",
-      input: "#3d8bfd",
-      output: "#3d8bfd",
-      if: "#e6c35c",
-      while: "#e6c35c",
-      for: "#e6c35c",
+    /* Classic Flowgorithm-inspired chart style */
+    const STYLE = {
+      fill: {
+        start: "#c6efce",
+        end: "#c6efce",
+        declare: "#ffffff",
+        assign: "#ffffff",
+        input: "#bdd7ee",
+        output: "#bdd7ee",
+        if: "#ffe699",
+        while: "#f8cbad",
+        for: "#f8cbad",
+      },
+      stroke: "#1f2a32",
+      line: "#1f2a32",
+      trueStroke: "#2e7d32",
+      falseStroke: "#c62828",
+      text: "#102028",
+      selected: "#1565c0",
+      link: "#6a1b9a",
+      exec: "#ef6c00",
+      size: {
+        start: { w: 150, h: 48 },
+        end: { w: 150, h: 48 },
+        declare: { w: 170, h: 52 },
+        assign: { w: 170, h: 52 },
+        input: { w: 170, h: 52 },
+        output: { w: 170, h: 52 },
+        if: { w: 180, h: 78 },
+        while: { w: 180, h: 78 },
+        for: { w: 190, h: 78 },
+      },
     };
 
     const state = {
@@ -587,7 +612,7 @@ const HTML = `<!DOCTYPE html>
       edges: [],
       selectedId: null,
       linkFrom: null,
-      pan: { x: 40, y: 40 },
+      pan: { x: 80, y: 28 },
       draggingNode: null,
       panning: false,
       panStart: null,
@@ -651,12 +676,25 @@ const HTML = `<!DOCTYPE html>
       }
     }
 
-    function addNode(type, x = 180 + state.nodes.length * 12, y = 80 + state.nodes.length * 70) {
+    function makeNode(type, x, y, props) {
+      const sz = STYLE.size[type] || { w: 170, h: 52 };
+      return {
+        id: uid(),
+        type,
+        x,
+        y,
+        w: sz.w,
+        h: sz.h,
+        props: props || defaultProps(type),
+      };
+    }
+
+    function addNode(type, x = 220 + state.nodes.length * 8, y = 60 + state.nodes.length * 70) {
       if ((type === "start" || type === "end") && state.nodes.some((n) => n.type === type)) {
         log(\`Only one \${type} shape is allowed.\`, "err");
         return;
       }
-      const node = { id: uid(), type, x, y, w: 170, h: 54, props: defaultProps(type) };
+      const node = makeNode(type, x, y);
       state.nodes.push(node);
       state.selectedId = node.id;
       render();
@@ -681,35 +719,69 @@ const HTML = `<!DOCTYPE html>
     function connect(fromId, toId) {
       if (fromId === toId) return;
       const from = findNode(fromId);
-      if (!from) return;
-      const branch = (from.type === "if" || from.type === "while")
-        ? (window.prompt("Branch? Enter 'true' or 'false' (default true)", "true") || "true").toLowerCase().startsWith("f")
-          ? "false"
-          : "true"
-        : "next";
+      const to = findNode(toId);
+      if (!from || !to) return;
 
-      if (from.type === "if" || from.type === "while") {
+      let branch = "next";
+      if (from.type === "if" || from.type === "while" || from.type === "for") {
+        // Flowgorithm convention: True on the left, False on the right
+        const fromCx = from.x + from.w / 2;
+        const toCx = to.x + to.w / 2;
+        branch = toCx <= fromCx ? "true" : "false";
+      }
+
+      if (from.type === "if" || from.type === "while" || from.type === "for") {
         state.edges = state.edges.filter((e) => !(e.from === fromId && e.branch === branch));
-      } else if (from.type !== "for") {
+      } else {
         state.edges = state.edges.filter((e) => e.from !== fromId);
       }
       state.edges.push({ from: fromId, to: toId, branch });
       state.linkFrom = null;
+      log(\`Linked → \${branch === "next" ? "next" : branch}\`, "sys");
       render();
     }
 
     function shapePath(type, w, h) {
-      const r = 10;
+      // Classic flowchart geometry (Flowgorithm-style)
       if (type === "start" || type === "end") {
-        return \`M \${h/2},0 H \${w - h/2} A \${h/2},\${h/2} 0 0 1 \${w - h/2},\${h} H \${h/2} A \${h/2},\${h/2} 0 0 1 \${h/2},0 Z\`;
+        const r = h / 2;
+        return \`M \${r},0 H \${w - r} A \${r},\${r} 0 0 1 \${w - r},\${h} H \${r} A \${r},\${r} 0 0 1 \${r},0 Z\`;
       }
       if (type === "input" || type === "output") {
-        return \`M 18,0 H \${w} L \${w - 18},\${h} H 0 Z\`;
+        const skew = Math.min(22, w * 0.14);
+        return \`M \${skew},0 H \${w} L \${w - skew},\${h} H 0 Z\`;
       }
       if (type === "if" || type === "while" || type === "for") {
-        return \`M \${w/2},0 L \${w},\${h/2} L \${w/2},\${h} L 0,\${h/2} Z\`;
+        return \`M \${w / 2},0 L \${w},\${h / 2} L \${w / 2},\${h} L 0,\${h / 2} Z\`;
       }
-      return \`M \${r},0 H \${w - r} Q \${w},0 \${w},\${r} V \${h - r} Q \${w},\${h} \${w - r},\${h} H \${r} Q 0,\${h} 0,\${h - r} V \${r} Q 0,0 \${r},0 Z\`;
+      // declare / assign rectangle
+      return \`M 0,0 H \${w} V \${h} H 0 Z\`;
+    }
+
+    function anchorPoint(node, which) {
+      const cx = node.x + node.w / 2;
+      const cy = node.y + node.h / 2;
+      if (which === "top") return { x: cx, y: node.y };
+      if (which === "bottom") return { x: cx, y: node.y + node.h };
+      if (which === "left") return { x: node.x, y: cy };
+      if (which === "right") return { x: node.x + node.w, y: cy };
+      return { x: cx, y: cy };
+    }
+
+    function elbowPath(x1, y1, x2, y2, branch) {
+      // Orthogonal connectors like Flowgorithm
+      if (branch === "true") {
+        const midX = Math.min(x1, x2) - 18;
+        const drop = y1 + Math.max(18, (y2 - y1) * 0.35);
+        return \`M \${x1} \${y1} L \${midX} \${y1} L \${midX} \${drop} L \${x2} \${drop} L \${x2} \${y2}\`;
+      }
+      if (branch === "false") {
+        const midX = Math.max(x1, x2) + 18;
+        const drop = y1 + Math.max(18, (y2 - y1) * 0.35);
+        return \`M \${x1} \${y1} L \${midX} \${y1} L \${midX} \${drop} L \${x2} \${drop} L \${x2} \${y2}\`;
+      }
+      const midY = y1 + Math.max(24, (y2 - y1) / 2);
+      return \`M \${x1} \${y1} L \${x1} \${midY} L \${x2} \${midY} L \${x2} \${y2}\`;
     }
 
     function render() {
@@ -720,43 +792,69 @@ const HTML = `<!DOCTYPE html>
       root.setAttribute("transform", \`translate(\${state.pan.x},\${state.pan.y})\`);
       svg.appendChild(root);
 
-      // edges
+      const defs = document.createElementNS(ns, "defs");
+      defs.innerHTML = \`
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="\${STYLE.line}"></path>
+        </marker>
+        <marker id="arrow-true" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="\${STYLE.trueStroke}"></path>
+        </marker>
+        <marker id="arrow-false" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="\${STYLE.falseStroke}"></path>
+        </marker>
+        <filter id="shape-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1" stdDeviation="1.2" flood-color="#000" flood-opacity="0.18"/>
+        </filter>
+      \`;
+      root.appendChild(defs);
+
+      // edges first (under shapes)
       for (const e of state.edges) {
         const a = findNode(e.from);
         const b = findNode(e.to);
         if (!a || !b) continue;
-        const x1 = a.x + a.w / 2;
-        const y1 = a.y + a.h;
-        const x2 = b.x + b.w / 2;
-        const y2 = b.y;
-        const midY = (y1 + y2) / 2;
+
+        let start;
+        let end = anchorPoint(b, "top");
+        let stroke = STYLE.line;
+        let marker = "url(#arrow)";
+
+        if (e.branch === "true") {
+          start = anchorPoint(a, "left");
+          stroke = STYLE.trueStroke;
+          marker = "url(#arrow-true)";
+        } else if (e.branch === "false") {
+          start = anchorPoint(a, "right");
+          stroke = STYLE.falseStroke;
+          marker = "url(#arrow-false)";
+        } else {
+          start = anchorPoint(a, "bottom");
+        }
+
         const path = document.createElementNS(ns, "path");
-        path.setAttribute("d", \`M \${x1} \${y1} C \${x1} \${midY}, \${x2} \${midY}, \${x2} \${y2}\`);
+        path.setAttribute("d", elbowPath(start.x, start.y, end.x, end.y, e.branch));
         path.setAttribute("fill", "none");
-        path.setAttribute("stroke", e.branch === "false" ? "#e85d5d" : "#7dd3c0");
-        path.setAttribute("stroke-width", "2.2");
-        path.setAttribute("marker-end", "url(#arrow)");
+        path.setAttribute("stroke", stroke);
+        path.setAttribute("stroke-width", "2");
+        path.setAttribute("stroke-linejoin", "round");
+        path.setAttribute("marker-end", marker);
         root.appendChild(path);
 
         if (e.branch === "true" || e.branch === "false") {
           const label = document.createElementNS(ns, "text");
-          label.setAttribute("x", (x1 + x2) / 2 + (e.branch === "false" ? 12 : -12));
-          label.setAttribute("y", midY);
-          label.setAttribute("fill", e.branch === "false" ? "#ffb4b4" : "#9be7d8");
-          label.setAttribute("font-size", "11");
-          label.setAttribute("font-family", "IBM Plex Mono, monospace");
-          label.textContent = e.branch;
+          const lx = e.branch === "true" ? start.x - 28 : start.x + 10;
+          const ly = start.y - 6;
+          label.setAttribute("x", lx);
+          label.setAttribute("y", ly);
+          label.setAttribute("fill", stroke);
+          label.setAttribute("font-size", "12");
+          label.setAttribute("font-weight", "700");
+          label.setAttribute("font-family", "Figtree, sans-serif");
+          label.textContent = e.branch === "true" ? "True" : "False";
           root.appendChild(label);
         }
       }
-
-      const defs = document.createElementNS(ns, "defs");
-      defs.innerHTML = \`
-        <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#7dd3c0"></path>
-        </marker>
-      \`;
-      root.appendChild(defs);
 
       for (const n of state.nodes) {
         const g = document.createElementNS(ns, "g");
@@ -766,26 +864,29 @@ const HTML = `<!DOCTYPE html>
 
         const path = document.createElementNS(ns, "path");
         path.setAttribute("d", shapePath(n.type, n.w, n.h));
-        path.setAttribute("fill", COLORS[n.type] || "#5ad4c0");
-        path.setAttribute("fill-opacity", n.id === state.highlightId ? "1" : "0.92");
-        path.setAttribute("stroke", n.id === state.selectedId || n.id === state.linkFrom ? "#fff" : "rgba(0,0,0,0.35)");
-        path.setAttribute("stroke-width", n.id === state.selectedId ? "2.5" : "1.4");
-        if (n.id === state.highlightId) {
-          path.setAttribute("filter", "none");
-          path.style.filter = "drop-shadow(0 0 10px rgba(240,180,41,0.85))";
-        }
+        path.setAttribute("fill", STYLE.fill[n.type] || "#fff");
+        path.setAttribute("stroke", n.id === state.highlightId
+          ? STYLE.exec
+          : n.id === state.linkFrom
+            ? STYLE.link
+            : n.id === state.selectedId
+              ? STYLE.selected
+              : STYLE.stroke);
+        path.setAttribute("stroke-width", n.id === state.selectedId || n.id === state.highlightId || n.id === state.linkFrom ? "2.6" : "1.7");
+        path.setAttribute("filter", "url(#shape-shadow)");
         g.appendChild(path);
 
+        // multiline-ish label
         const text = document.createElementNS(ns, "text");
         text.setAttribute("x", n.w / 2);
         text.setAttribute("y", n.h / 2 + 4);
         text.setAttribute("text-anchor", "middle");
-        text.setAttribute("fill", "#102028");
-        text.setAttribute("font-size", "12.5");
+        text.setAttribute("fill", STYLE.text);
+        text.setAttribute("font-size", n.type === "if" || n.type === "while" || n.type === "for" ? "12" : "13");
         text.setAttribute("font-weight", "700");
         text.setAttribute("font-family", "Figtree, sans-serif");
         const label = nodeLabel(n);
-        text.textContent = label.length > 22 ? label.slice(0, 21) + "…" : label;
+        text.textContent = label.length > 24 ? label.slice(0, 23) + "…" : label;
         g.appendChild(text);
 
         g.addEventListener("pointerdown", onNodePointerDown);
@@ -805,7 +906,7 @@ const HTML = `<!DOCTYPE html>
         if (!state.linkFrom) {
           state.linkFrom = id;
           state.selectedId = id;
-          log("Select a target shape to connect.", "sys");
+          log("Click another shape to link. For If/While/For: left = True, right = False.", "sys");
         } else {
           connect(state.linkFrom, id);
         }
@@ -882,7 +983,7 @@ const HTML = `<!DOCTYPE html>
       } else {
         fields += '<p class="empty-state">No editable properties.</p>';
       }
-      fields += '<p class="hint" style="margin-top:0.75rem">Tip: Shift-click two shapes to link them.</p>';
+      fields += '<p class="hint" style="margin-top:0.75rem">Tip: Shift-click to link. Left of If = True, right = False.</p>';
       inspector.innerHTML = fields;
       inspector.querySelectorAll("[data-prop]").forEach((el) => {
         el.addEventListener("change", () => {
@@ -1261,10 +1362,9 @@ const HTML = `<!DOCTYPE html>
       state.selectedId = null;
       state.linkFrom = null;
       state.idSeq = 1;
-      addNode("start", 220, 40);
-      addNode("end", 220, 320);
-      const s = state.nodes.find((n) => n.type === "start");
-      const e = state.nodes.find((n) => n.type === "end");
+      const s = makeNode("start", 260, 36);
+      const e = makeNode("end", 260, 220);
+      state.nodes = [s, e];
       state.edges = [{ from: s.id, to: e.id, branch: "next" }];
       render();
       renderInspector();
@@ -1275,13 +1375,13 @@ const HTML = `<!DOCTYPE html>
       state.nodes = [];
       state.edges = [];
       state.idSeq = 1;
-      const start = { id: uid(), type: "start", x: 240, y: 30, w: 170, h: 54, props: {} };
-      const decl = { id: uid(), type: "declare", x: 240, y: 110, w: 170, h: 54, props: { name: "n", typeName: "Integer", isArray: false, size: "" } };
-      const inp = { id: uid(), type: "input", x: 240, y: 190, w: 170, h: 54, props: { variable: "n" } };
-      const iff = { id: uid(), type: "if", x: 240, y: 280, w: 170, h: 64, props: { condition: "n % 2 == 0" } };
-      const even = { id: uid(), type: "output", x: 60, y: 390, w: 170, h: 54, props: { expression: '"Even"' } };
-      const odd = { id: uid(), type: "output", x: 420, y: 390, w: 170, h: 54, props: { expression: '"Odd"' } };
-      const end = { id: uid(), type: "end", x: 240, y: 500, w: 170, h: 54, props: {} };
+      const start = makeNode("start", 260, 24);
+      const decl = makeNode("declare", 250, 100, { name: "n", typeName: "Integer", isArray: false, size: "" });
+      const inp = makeNode("input", 250, 180, { variable: "n" });
+      const iff = makeNode("if", 245, 270, { condition: "n % 2 == 0" });
+      const even = makeNode("output", 40, 400, { expression: '"Even"' });
+      const odd = makeNode("output", 460, 400, { expression: '"Odd"' });
+      const end = makeNode("end", 260, 520);
       state.nodes = [start, decl, inp, iff, even, odd, end];
       state.edges = [
         { from: start.id, to: decl.id, branch: "next" },
@@ -1293,9 +1393,10 @@ const HTML = `<!DOCTYPE html>
         { from: odd.id, to: end.id, branch: "next" },
       ];
       state.selectedId = null;
+      state.pan = { x: 40, y: 16 };
       render();
       renderInspector();
-      log("Loaded even/odd example.", "sys");
+      log("Loaded even/odd example (Flowgorithm-style chart).", "sys");
     }
 
     function saveProgram() {
@@ -1346,9 +1447,9 @@ const HTML = `<!DOCTYPE html>
       state.nodes = [];
       state.edges = [];
       state.idSeq = 1;
-      const start = { id: uid(), type: "start", x: 240, y: 30, w: 170, h: 54, props: {} };
+      const start = makeNode("start", 260, 24);
       state.nodes.push(start);
-      let y = 110;
+      let y = 100;
       let prev = start;
       const link = (from, to, branch = "next") => state.edges.push({ from: from.id, to: to.id, branch });
 
@@ -1356,43 +1457,47 @@ const HTML = `<!DOCTYPE html>
         const tag = el.tagName.toLowerCase();
         let node = null;
         if (tag === "declare") {
-          node = { id: uid(), type: "declare", x: 240, y, w: 170, h: 54, props: {
+          node = makeNode("declare", 250, y, {
             name: el.getAttribute("name") || "x",
             typeName: el.getAttribute("type") || "Integer",
             isArray: (el.getAttribute("array") || "False").toLowerCase() === "true",
             size: el.getAttribute("size") || "",
-          }};
+          });
         } else if (tag === "input") {
-          node = { id: uid(), type: "input", x: 240, y, w: 170, h: 54, props: { variable: el.getAttribute("variable") || "x" } };
+          node = makeNode("input", 250, y, { variable: el.getAttribute("variable") || "x" });
         } else if (tag === "output") {
-          node = { id: uid(), type: "output", x: 240, y, w: 170, h: 54, props: { expression: el.getAttribute("expression") || '""' } };
+          node = makeNode("output", 250, y, { expression: el.getAttribute("expression") || '""' });
         } else if (tag === "assign") {
-          node = { id: uid(), type: "assign", x: 240, y, w: 170, h: 54, props: {
+          node = makeNode("assign", 250, y, {
             variable: el.getAttribute("variable") || "x",
             expression: el.getAttribute("expression") || "0",
-          }};
+          });
         } else if (tag === "if") {
-          node = { id: uid(), type: "if", x: 240, y, w: 170, h: 64, props: { condition: el.getAttribute("expression") || el.getAttribute("condition") || "true" } };
+          node = makeNode("if", 245, y, {
+            condition: el.getAttribute("expression") || el.getAttribute("condition") || "true",
+          });
         } else if (tag === "while") {
-          node = { id: uid(), type: "while", x: 240, y, w: 170, h: 64, props: { condition: el.getAttribute("expression") || el.getAttribute("condition") || "true" } };
+          node = makeNode("while", 245, y, {
+            condition: el.getAttribute("expression") || el.getAttribute("condition") || "true",
+          });
         } else if (tag === "for") {
-          node = { id: uid(), type: "for", x: 240, y, w: 170, h: 64, props: {
+          node = makeNode("for", 240, y, {
             variable: el.getAttribute("variable") || "i",
             start: el.getAttribute("start") || "1",
             end: el.getAttribute("end") || "10",
             step: el.getAttribute("step") || "1",
-          }};
+          });
         }
         if (node) {
           state.nodes.push(node);
           link(prev, node);
           prev = node;
-          y += 85;
+          y += 90;
         }
       }
 
       body.forEach(addFromEl);
-      const end = { id: uid(), type: "end", x: 240, y, w: 170, h: 54, props: {} };
+      const end = makeNode("end", 260, y);
       state.nodes.push(end);
       link(prev, end);
       render();

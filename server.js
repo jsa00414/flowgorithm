@@ -231,7 +231,7 @@ const HTML = `<!DOCTYPE html>
 
     main {
       display: grid;
-      grid-template-columns: 210px minmax(0, 1fr) 300px;
+      grid-template-columns: minmax(0, 1fr) 300px;
       min-height: 0;
       min-width: 0;
       height: 100%;
@@ -239,17 +239,13 @@ const HTML = `<!DOCTYPE html>
       gap: 0;
     }
 
-    aside, .side {
+    .side {
       background: rgba(26, 48, 60, 0.88);
-      border-right: 1px solid rgba(255,255,255,0.05);
+      border-left: 1px solid rgba(255,255,255,0.05);
       padding: 1rem;
       overflow: auto;
       min-height: 0;
       min-width: 0;
-    }
-    .side {
-      border-right: none;
-      border-left: 1px solid rgba(255,255,255,0.05);
       display: grid;
       /* Inspector + Variables stay compact; Console takes leftover space */
       grid-template-rows: auto auto minmax(0, 1fr);
@@ -268,38 +264,6 @@ const HTML = `<!DOCTYPE html>
       text-transform: uppercase;
       color: var(--muted);
       font-weight: 700;
-    }
-
-    .palette {
-      display: grid;
-      gap: 0.45rem;
-    }
-    .palette button {
-      text-align: left;
-      display: grid;
-      grid-template-columns: 14px 1fr;
-      gap: 0.55rem;
-      align-items: center;
-      padding: 0.55rem 0.7rem;
-    }
-    .swatch {
-      width: 12px;
-      height: 12px;
-      border-radius: 2px;
-      border: 1px solid rgba(0,0,0,0.25);
-    }
-    .swatch.start { background: #c6efce; }
-    .swatch.declare { background: #ffffff; }
-    .swatch.assign { background: #ffffff; }
-    .swatch.input, .swatch.output { background: #bdd7ee; }
-    .swatch.if, .swatch.while, .swatch.for { background: #ffe699; }
-    .swatch.end { background: #c6efce; }
-
-    .hint {
-      margin-top: 1rem;
-      color: var(--muted);
-      font-size: 0.8rem;
-      line-height: 1.45;
     }
 
     .workspace {
@@ -574,25 +538,17 @@ const HTML = `<!DOCTYPE html>
       .brand h1 { font-size: 1.15rem; }
       main {
         grid-template-columns: 1fr;
-        grid-template-rows: auto minmax(0, 1fr) minmax(0, 32%);
+        grid-template-rows: minmax(0, 1fr) minmax(0, 36%);
         overflow: hidden;
       }
-      aside, .side {
-        border: none;
-        border-bottom: 1px solid rgba(255,255,255,0.05);
-      }
-      aside {
-        max-height: 7.5rem;
-        padding: 0.65rem 0.85rem;
-      }
       .side {
+        border: none;
+        border-top: 1px solid rgba(255,255,255,0.05);
         padding: 0.55rem 0.85rem;
         grid-template-rows: auto auto minmax(0, 1fr);
         overflow: auto;
         max-height: 100%;
       }
-      .palette { grid-template-columns: repeat(3, 1fr); }
-      .hint,
       .inspector .hint { display: none; }
       .console-wrap {
         min-height: 0;
@@ -654,16 +610,6 @@ const HTML = `<!DOCTYPE html>
   </header>
 
   <main>
-    <aside>
-      <h2>Shapes</h2>
-      <div class="palette" id="palette"></div>
-      <p class="hint">
-        Click a connector arrow (+) to insert a shape — like Flowgorithm.
-        Or use the Shapes list. Shift-click two shapes to link
-        (left of If = True, right = False).
-      </p>
-    </aside>
-
     <section class="workspace">
       <svg id="canvas" xmlns="http://www.w3.org/2000/svg"></svg>
     </section>
@@ -1367,7 +1313,7 @@ const HTML = `<!DOCTYPE html>
       } else {
         fields += '<p class="empty-state">No editable properties.</p>';
       }
-      fields += '<p class="hint" style="margin-top:0.75rem">Tip: click a connector (+) to insert shapes. Shift-click to link.</p>';
+      fields += '<p class="hint" style="margin-top:0.75rem">Tip: click a connector (+) to insert shapes.</p>';
       inspector.innerHTML = fields;
       inspector.querySelectorAll("[data-prop]").forEach((el) => {
         el.addEventListener("change", () => {
@@ -1896,15 +1842,7 @@ const HTML = `<!DOCTYPE html>
       log("Imported .fprg (linear Main body).", "sys");
     }
 
-    // palette
-    const palette = document.getElementById("palette");
-    SHAPE_DEFS.forEach((def) => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.innerHTML = \`<span class="swatch \${def.type}"></span><span>\${def.label}</span>\`;
-      btn.addEventListener("click", () => addNode(def.type));
-      palette.appendChild(btn);
-    });
+    // palette removed — insert shapes by clicking connector arrows (+)
 
     btnRun.addEventListener("click", () => runProgram(false));
     btnStep.addEventListener("click", () => {

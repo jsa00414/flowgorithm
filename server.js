@@ -430,6 +430,140 @@ const HTML = `<!DOCTYPE html>
       font-size: 0.72rem;
     }
 
+    /* Flowgorithm-style Add Shape popup (click a connector arrow) */
+    .add-menu-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      background: rgba(15, 28, 36, 0.28);
+      display: none;
+    }
+    .add-menu-backdrop.open { display: block; }
+
+    .add-menu {
+      position: fixed;
+      z-index: 90;
+      display: none;
+      width: min(560px, calc(100vw - 24px));
+      max-height: min(520px, calc(100dvh - 24px));
+      overflow: auto;
+      background: #f7f8fa;
+      border: 1px solid #9aa7b5;
+      border-radius: 6px;
+      box-shadow: 0 14px 40px rgba(0,0,0,0.28);
+      color: #1a2430;
+      font-family: var(--font);
+      padding: 0.55rem;
+    }
+    .add-menu.open { display: block; }
+    .add-menu-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 0.55rem;
+    }
+    .add-section {
+      background: #fff;
+      border: 1px solid #c5ced8;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .add-section h3 {
+      margin: 0;
+      padding: 0.35rem 0.55rem;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: #9ec5e8;
+      color: #102028;
+      border-bottom: 1px solid #7aaad0;
+    }
+    .add-section .cols {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.35rem;
+      padding: 0.45rem;
+    }
+    .add-section .cols.three { grid-template-columns: repeat(3, 1fr); }
+    .add-section .cols.one { grid-template-columns: 1fr; }
+    .add-col-label {
+      grid-column: 1 / -1;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #5a6a7a;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-top: 0.15rem;
+    }
+    .add-item {
+      appearance: none;
+      border: none;
+      background: transparent;
+      padding: 0.2rem;
+      cursor: pointer;
+      display: grid;
+      gap: 0.2rem;
+      justify-items: center;
+      font-family: var(--font);
+      color: #102028;
+    }
+    .add-item:hover { background: rgba(158, 197, 232, 0.35); border-radius: 4px; }
+    .add-item:disabled { opacity: 0.4; cursor: not-allowed; }
+    .add-glyph {
+      width: 88px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: #102028;
+      border: 1.5px solid #1f2a32;
+    }
+    .add-glyph.input { background: #bdd7ee; clip-path: polygon(12% 0, 100% 0, 88% 100%, 0 100%); border: none; outline: 1.5px solid #1f2a32; }
+    .add-glyph.output { background: #c6efce; clip-path: polygon(12% 0, 100% 0, 88% 100%, 0 100%); border: none; outline: 1.5px solid #1f2a32; }
+    .add-glyph.declare { background: #fff2cc; border-left-width: 5px; }
+    .add-glyph.assign { background: #fff2cc; }
+    .add-glyph.if {
+      background: #f4cccc;
+      width: 56px;
+      height: 40px;
+      clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      border: none;
+      outline: 1.5px solid #1f2a32;
+    }
+    .add-glyph.call { background: #d9d2e9; border-left-width: 4px; border-right-width: 4px; }
+    .add-glyph.while,
+    .add-glyph.for,
+    .add-glyph.do {
+      background: #f8cbad;
+      border-radius: 16px;
+    }
+    .add-glyph.comment {
+      background: #fff;
+      border-style: dashed;
+    }
+    .add-glyph.breakpoint {
+      background: #e06666;
+      color: #fff;
+      width: 34px;
+      border-radius: 6px;
+      clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+      border: none;
+      outline: 1.5px solid #1f2a32;
+    }
+    .add-item span.cap {
+      font-size: 0.7rem;
+      font-weight: 600;
+    }
+    .add-menu-foot {
+      margin-top: 0.45rem;
+      font-size: 0.72rem;
+      color: #5a6a7a;
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      .add-menu-grid { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 980px) {
       header.app-bar {
         flex-wrap: wrap;
@@ -524,9 +658,9 @@ const HTML = `<!DOCTYPE html>
       <h2>Shapes</h2>
       <div class="palette" id="palette"></div>
       <p class="hint">
-        Click a shape to add it. Drag the chart to pan.
-        Shift-click two shapes to link. For If/While/For:
-        target on the left = True, right = False.
+        Click a connector arrow (+) to insert a shape — like Flowgorithm.
+        Or use the Shapes list. Shift-click two shapes to link
+        (left of If = True, right = False).
       </p>
     </aside>
 
@@ -559,6 +693,62 @@ const HTML = `<!DOCTYPE html>
     </section>
   </main>
 
+  <div class="add-menu-backdrop" id="add-backdrop" hidden></div>
+  <div class="add-menu" id="add-menu" role="dialog" aria-label="Add shape" hidden>
+    <div class="add-menu-grid">
+      <div>
+        <div class="add-section" style="margin-bottom:0.55rem">
+          <h3>Miscellaneous</h3>
+          <div class="cols">
+            <button type="button" class="add-item" data-add="comment"><span class="add-glyph comment">Comment</span><span class="cap">Comment</span></button>
+            <button type="button" class="add-item" data-add="breakpoint"><span class="add-glyph breakpoint">BP</span><span class="cap">Breakpoint</span></button>
+          </div>
+        </div>
+        <div class="add-section">
+          <h3>Statement</h3>
+          <div class="cols three">
+            <div class="add-col-label">Input / Output</div>
+            <button type="button" class="add-item" data-add="input"><span class="add-glyph input">Input</span><span class="cap">Input</span></button>
+            <button type="button" class="add-item" data-add="output"><span class="add-glyph output">Output</span><span class="cap">Output</span></button>
+            <span></span>
+            <div class="add-col-label">Variables</div>
+            <button type="button" class="add-item" data-add="declare"><span class="add-glyph declare">Declare</span><span class="cap">Declare</span></button>
+            <button type="button" class="add-item" data-add="assign"><span class="add-glyph assign">Assign</span><span class="cap">Assign</span></button>
+            <span></span>
+            <div class="add-col-label">Control</div>
+            <button type="button" class="add-item" data-add="if"><span class="add-glyph if">If</span><span class="cap">If</span></button>
+            <button type="button" class="add-item" data-add="call" disabled title="Coming soon"><span class="add-glyph call">Call</span><span class="cap">Call</span></button>
+            <span></span>
+            <div class="add-col-label">Looping</div>
+            <button type="button" class="add-item" data-add="while"><span class="add-glyph while">While</span><span class="cap">While</span></button>
+            <button type="button" class="add-item" data-add="for"><span class="add-glyph for">For</span><span class="cap">For</span></button>
+            <button type="button" class="add-item" data-add="do"><span class="add-glyph do">Do</span><span class="cap">Do</span></button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="add-section" style="margin-bottom:0.55rem">
+          <h3>Turtle Graphics</h3>
+          <div class="cols one">
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph assign">Forward</span><span class="cap">Forward</span></button>
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph assign">Turn</span><span class="cap">Turn</span></button>
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph output">Clear</span><span class="cap">Clear</span></button>
+          </div>
+        </div>
+        <div class="add-section">
+          <h3>Files</h3>
+          <div class="cols">
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph input">Read</span><span class="cap">Read</span></button>
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph output">Write</span><span class="cap">Write</span></button>
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph assign">Open</span><span class="cap">Open</span></button>
+            <button type="button" class="add-item" disabled title="Coming soon"><span class="add-glyph assign">Close</span><span class="cap">Close</span></button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="add-menu-foot">Click a connector arrow, then choose a shape to insert — like Flowgorithm.</p>
+  </div>
+
   <script>
   (() => {
     const SHAPE_DEFS = [
@@ -570,6 +760,8 @@ const HTML = `<!DOCTYPE html>
       { type: "if", label: "If" },
       { type: "while", label: "While" },
       { type: "for", label: "For" },
+      { type: "do", label: "Do" },
+      { type: "comment", label: "Comment" },
       { type: "end", label: "End", once: true },
     ];
 
@@ -578,13 +770,17 @@ const HTML = `<!DOCTYPE html>
       fill: {
         start: "#c6efce",
         end: "#c6efce",
-        declare: "#ffffff",
-        assign: "#ffffff",
+        declare: "#fff2cc",
+        assign: "#fff2cc",
         input: "#bdd7ee",
-        output: "#bdd7ee",
-        if: "#ffe699",
+        output: "#c6efce",
+        if: "#f4cccc",
         while: "#f8cbad",
         for: "#f8cbad",
+        do: "#f8cbad",
+        comment: "#ffffff",
+        breakpoint: "#e06666",
+        call: "#d9d2e9",
       },
       stroke: "#1f2a32",
       line: "#1f2a32",
@@ -602,8 +798,12 @@ const HTML = `<!DOCTYPE html>
         input: { w: 170, h: 52 },
         output: { w: 170, h: 52 },
         if: { w: 180, h: 78 },
-        while: { w: 180, h: 78 },
-        for: { w: 190, h: 78 },
+        while: { w: 180, h: 70 },
+        for: { w: 190, h: 70 },
+        do: { w: 180, h: 70 },
+        comment: { w: 170, h: 48 },
+        breakpoint: { w: 56, h: 56 },
+        call: { w: 170, h: 52 },
       },
     };
 
@@ -623,6 +823,7 @@ const HTML = `<!DOCTYPE html>
       highlightId: null,
       vars: Object.create(null),
       idSeq: 1,
+      pendingEdge: null,
     };
 
     const svg = document.getElementById("canvas");
@@ -655,7 +856,11 @@ const HTML = `<!DOCTYPE html>
         case "assign": return { variable: "x", expression: "x + 1" };
         case "if": return { condition: "x > 0" };
         case "while": return { condition: "x < 10" };
+        case "do": return { condition: "x < 10" };
         case "for": return { variable: "i", start: "1", end: "10", step: "1" };
+        case "comment": return { text: "Comment" };
+        case "breakpoint": return {};
+        case "call": return { name: "MyFunction" };
         default: return {};
       }
     }
@@ -671,7 +876,11 @@ const HTML = `<!DOCTYPE html>
         case "assign": return \`\${p.variable} = \${p.expression}\`;
         case "if": return p.condition;
         case "while": return \`While \${p.condition}\`;
+        case "do": return \`Do \${p.condition}\`;
         case "for": return \`For \${p.variable} = \${p.start} to \${p.end}\`;
+        case "comment": return p.text || "Comment";
+        case "breakpoint": return "●";
+        case "call": return \`Call \${p.name || "?"}\`;
         default: return n.type;
       }
     }
@@ -723,14 +932,14 @@ const HTML = `<!DOCTYPE html>
       if (!from || !to) return;
 
       let branch = "next";
-      if (from.type === "if" || from.type === "while" || from.type === "for") {
+      if (from.type === "if" || from.type === "while" || from.type === "for" || from.type === "do") {
         // Flowgorithm convention: True on the left, False on the right
         const fromCx = from.x + from.w / 2;
         const toCx = to.x + to.w / 2;
         branch = toCx <= fromCx ? "true" : "false";
       }
 
-      if (from.type === "if" || from.type === "while" || from.type === "for") {
+      if (from.type === "if" || from.type === "while" || from.type === "for" || from.type === "do") {
         state.edges = state.edges.filter((e) => !(e.from === fromId && e.branch === branch));
       } else {
         state.edges = state.edges.filter((e) => e.from !== fromId);
@@ -751,8 +960,29 @@ const HTML = `<!DOCTYPE html>
         const skew = Math.min(22, w * 0.14);
         return \`M \${skew},0 H \${w} L \${w - skew},\${h} H 0 Z\`;
       }
-      if (type === "if" || type === "while" || type === "for") {
+      if (type === "if") {
         return \`M \${w / 2},0 L \${w},\${h / 2} L \${w / 2},\${h} L 0,\${h / 2} Z\`;
+      }
+      if (type === "while" || type === "for" || type === "do") {
+        const r = Math.min(18, h / 2);
+        return \`M \${r},0 H \${w - r} Q \${w},0 \${w},\${r} V \${h - r} Q \${w},\${h} \${w - r},\${h} H \${r} Q 0,\${h} 0,\${h - r} V \${r} Q 0,0 \${r},0 Z\`;
+      }
+      if (type === "breakpoint") {
+        const s = Math.min(w, h);
+        const cx = w / 2, cy = h / 2, r = s / 2 - 1;
+        // octagon
+        const pts = [];
+        for (let i = 0; i < 8; i++) {
+          const a = (Math.PI / 8) + i * (Math.PI / 4);
+          pts.push(\`\${cx + r * Math.cos(a)},\${cy + r * Math.sin(a)}\`);
+        }
+        return \`M \${pts[0]} L \${pts.slice(1).join(" L ")} Z\`;
+      }
+      if (type === "comment") {
+        return \`M 0,0 H \${w} V \${h} H 0 Z\`;
+      }
+      if (type === "call") {
+        return \`M 0,0 H \${w} V \${h} H 0 Z\`;
       }
       // declare / assign rectangle
       return \`M 0,0 H \${w} V \${h} H 0 Z\`;
@@ -783,6 +1013,95 @@ const HTML = `<!DOCTYPE html>
       const midY = y1 + Math.max(24, (y2 - y1) / 2);
       return \`M \${x1} \${y1} L \${x1} \${midY} L \${x2} \${midY} L \${x2} \${y2}\`;
     }
+
+    function edgeMidpoint(start, end, branch) {
+      if (branch === "true" || branch === "false") {
+        return { x: (start.x + end.x) / 2, y: start.y + Math.max(18, (end.y - start.y) * 0.35) };
+      }
+      return { x: (start.x + end.x) / 2, y: start.y + Math.max(24, (end.y - start.y) / 2) };
+    }
+
+    const addMenu = document.getElementById("add-menu");
+    const addBackdrop = document.getElementById("add-backdrop");
+
+    function openAddMenu(ev, edge) {
+      state.pendingEdge = { from: edge.from, to: edge.to, branch: edge.branch };
+      addMenu.hidden = false;
+      addBackdrop.hidden = false;
+      addMenu.classList.add("open");
+      addBackdrop.classList.add("open");
+      const pad = 12;
+      const menuW = Math.min(560, window.innerWidth - 24);
+      const menuH = Math.min(520, window.innerHeight - 24);
+      let left = ev.clientX + 8;
+      let top = ev.clientY + 8;
+      if (left + menuW > window.innerWidth - pad) left = window.innerWidth - menuW - pad;
+      if (top + menuH > window.innerHeight - pad) top = window.innerHeight - menuH - pad;
+      if (left < pad) left = pad;
+      if (top < pad) top = pad;
+      addMenu.style.left = left + "px";
+      addMenu.style.top = top + "px";
+    }
+
+    function closeAddMenu() {
+      state.pendingEdge = null;
+      addMenu.classList.remove("open");
+      addBackdrop.classList.remove("open");
+      addMenu.hidden = true;
+      addBackdrop.hidden = true;
+    }
+
+    function insertOnEdge(type) {
+      const edge = state.pendingEdge;
+      if (!edge) return;
+      const from = findNode(edge.from);
+      const to = findNode(edge.to);
+      if (!from || !to) {
+        closeAddMenu();
+        return;
+      }
+
+      const sz = STYLE.size[type] || { w: 170, h: 52 };
+      const midX = (from.x + from.w / 2 + to.x + to.w / 2) / 2 - sz.w / 2;
+      const midY = (from.y + from.h + to.y) / 2 - sz.h / 2;
+      const node = makeNode(type, Math.round(midX), Math.round(midY));
+      state.nodes.push(node);
+
+      // Push nodes below the insert point down a bit for readability
+      const insertY = node.y;
+      state.nodes.forEach((n) => {
+        if (n.id !== node.id && n.y >= insertY - 8 && n.id !== from.id) {
+          n.y += sz.h + 36;
+        }
+      });
+
+      state.edges = state.edges.filter(
+        (e) => !(e.from === edge.from && e.to === edge.to && e.branch === edge.branch)
+      );
+      state.edges.push({ from: edge.from, to: node.id, branch: edge.branch });
+
+      if (type === "if" || type === "while" || type === "for" || type === "do") {
+        state.edges.push({ from: node.id, to: edge.to, branch: "true" });
+      } else {
+        state.edges.push({ from: node.id, to: edge.to, branch: "next" });
+      }
+
+      state.selectedId = node.id;
+      closeAddMenu();
+      render();
+      renderInspector();
+      log(\`Inserted \${type} on connector.\`, "sys");
+    }
+
+    addBackdrop.addEventListener("click", closeAddMenu);
+    addMenu.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("[data-add]");
+      if (!btn || btn.disabled) return;
+      insertOnEdge(btn.getAttribute("data-add"));
+    });
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeAddMenu();
+    });
 
     function render() {
       const ns = "http://www.w3.org/2000/svg";
@@ -832,14 +1151,55 @@ const HTML = `<!DOCTYPE html>
           start = anchorPoint(a, "bottom");
         }
 
+        const d = elbowPath(start.x, start.y, end.x, end.y, e.branch);
+
         const path = document.createElementNS(ns, "path");
-        path.setAttribute("d", elbowPath(start.x, start.y, end.x, end.y, e.branch));
+        path.setAttribute("d", d);
         path.setAttribute("fill", "none");
         path.setAttribute("stroke", stroke);
         path.setAttribute("stroke-width", "2");
         path.setAttribute("stroke-linejoin", "round");
         path.setAttribute("marker-end", marker);
+        path.style.pointerEvents = "none";
+
+        // Invisible wide hit target — click arrow to add a shape (Flowgorithm)
+        const hit = document.createElementNS(ns, "path");
+        hit.setAttribute("d", d);
+        hit.setAttribute("fill", "none");
+        hit.setAttribute("stroke", "transparent");
+        hit.setAttribute("stroke-width", "18");
+        hit.style.cursor = "pointer";
+        hit.addEventListener("pointerdown", (ev) => {
+          ev.stopPropagation();
+          openAddMenu(ev, e);
+        });
+        hit.addEventListener("mouseenter", () => path.setAttribute("stroke-width", "3.2"));
+        hit.addEventListener("mouseleave", () => path.setAttribute("stroke-width", "2"));
+        root.appendChild(hit);
         root.appendChild(path);
+
+        // Midpoint + glyph for discoverability
+        const mid = edgeMidpoint(start, end, e.branch);
+        const plus = document.createElementNS(ns, "circle");
+        plus.setAttribute("cx", mid.x);
+        plus.setAttribute("cy", mid.y);
+        plus.setAttribute("r", "7");
+        plus.setAttribute("fill", "#ffffff");
+        plus.setAttribute("stroke", stroke);
+        plus.setAttribute("stroke-width", "1.6");
+        plus.style.pointerEvents = "none";
+        root.appendChild(plus);
+        const plusText = document.createElementNS(ns, "text");
+        plusText.setAttribute("x", mid.x);
+        plusText.setAttribute("y", mid.y + 3.5);
+        plusText.setAttribute("text-anchor", "middle");
+        plusText.setAttribute("font-size", "11");
+        plusText.setAttribute("font-weight", "700");
+        plusText.setAttribute("fill", stroke);
+        plusText.setAttribute("font-family", "Figtree, sans-serif");
+        plusText.style.pointerEvents = "none";
+        plusText.textContent = "+";
+        root.appendChild(plusText);
 
         if (e.branch === "true" || e.branch === "false") {
           const label = document.createElementNS(ns, "text");
@@ -874,7 +1234,23 @@ const HTML = `<!DOCTYPE html>
               : STYLE.stroke);
         path.setAttribute("stroke-width", n.id === state.selectedId || n.id === state.highlightId || n.id === state.linkFrom ? "2.6" : "1.7");
         path.setAttribute("filter", "url(#shape-shadow)");
-        g.appendChild(path);
+        if (n.type === "comment") path.setAttribute("stroke-dasharray", "5 4");
+        if (n.type === "declare" || n.type === "call") {
+          // double side bars like Flowgorithm declare/call
+          const bar = document.createElementNS(ns, "path");
+          if (n.type === "declare") {
+            bar.setAttribute("d", \`M 6,0 V \${n.h} M 10,0 V \${n.h}\`);
+          } else {
+            bar.setAttribute("d", \`M 6,0 V \${n.h} M \${n.w - 6},0 V \${n.h}\`);
+          }
+          bar.setAttribute("fill", "none");
+          bar.setAttribute("stroke", STYLE.stroke);
+          bar.setAttribute("stroke-width", "1.5");
+          g.appendChild(path);
+          g.appendChild(bar);
+        } else {
+          g.appendChild(path);
+        }
 
         // multiline-ish label
         const text = document.createElementNS(ns, "text");
@@ -882,11 +1258,15 @@ const HTML = `<!DOCTYPE html>
         text.setAttribute("y", n.h / 2 + 4);
         text.setAttribute("text-anchor", "middle");
         text.setAttribute("fill", STYLE.text);
-        text.setAttribute("font-size", n.type === "if" || n.type === "while" || n.type === "for" ? "12" : "13");
+        text.setAttribute("font-size", n.type === "if" || n.type === "while" || n.type === "for" || n.type === "do" ? "12" : "13");
         text.setAttribute("font-weight", "700");
         text.setAttribute("font-family", "Figtree, sans-serif");
         const label = nodeLabel(n);
         text.textContent = label.length > 24 ? label.slice(0, 23) + "…" : label;
+        if (n.type === "breakpoint") {
+          text.setAttribute("fill", "#ffffff");
+          text.textContent = "BP";
+        }
         g.appendChild(text);
 
         g.addEventListener("pointerdown", onNodePointerDown);
@@ -973,17 +1353,21 @@ const HTML = `<!DOCTYPE html>
       } else if (n.type === "assign") {
         fields += field("variable", "Variable", p.variable);
         fields += field("expression", "Expression", p.expression);
-      } else if (n.type === "if" || n.type === "while") {
+      } else if (n.type === "if" || n.type === "while" || n.type === "do") {
         fields += field("condition", "Condition", p.condition);
       } else if (n.type === "for") {
         fields += field("variable", "Variable", p.variable);
         fields += field("start", "Start", p.start);
         fields += field("end", "End", p.end);
         fields += field("step", "Step", p.step);
+      } else if (n.type === "comment") {
+        fields += field("text", "Text", p.text || "");
+      } else if (n.type === "breakpoint") {
+        fields += '<p class="empty-state">Pauses Run until you Step/Run again.</p>';
       } else {
         fields += '<p class="empty-state">No editable properties.</p>';
       }
-      fields += '<p class="hint" style="margin-top:0.75rem">Tip: Shift-click to link. Left of If = True, right = False.</p>';
+      fields += '<p class="hint" style="margin-top:0.75rem">Tip: click a connector (+) to insert shapes. Shift-click to link.</p>';
       inspector.innerHTML = fields;
       inspector.querySelectorAll("[data-prop]").forEach((el) => {
         el.addEventListener("change", () => {
@@ -1268,12 +1652,19 @@ const HTML = `<!DOCTYPE html>
             if (!state.running) break;
             const t = declared[n.props.variable] || "String";
             state.vars[n.props.variable] = coerce(t, raw);
+          } else if (n.type === "comment") {
+            // documentation only
+          } else if (n.type === "breakpoint") {
+            log("Breakpoint hit — click Step or Run to continue.", "sys");
+            state.stepMode = true;
+            await waitStep();
+            if (!state.running) break;
           } else if (n.type === "if") {
             branch = evalExpr(n.props.condition, state.vars) ? "true" : "false";
-          } else if (n.type === "while") {
+          } else if (n.type === "while" || n.type === "do") {
             const ok = !!evalExpr(n.props.condition, state.vars);
             if (ok) {
-              loopStack.push({ type: "while", nodeId: n.id });
+              loopStack.push({ type: n.type, nodeId: n.id });
               branch = "true";
             } else {
               branch = "false";
@@ -1300,7 +1691,7 @@ const HTML = `<!DOCTYPE html>
           showVars();
 
           // after body of loops, return to loop header
-          if (n.type !== "while" && n.type !== "for" && n.type !== "if") {
+          if (n.type !== "while" && n.type !== "do" && n.type !== "for" && n.type !== "if") {
             const edge = nextEdge(n.id, "next");
             if (!edge && loopStack.length) {
               const frame = loopStack.pop();
@@ -1317,7 +1708,7 @@ const HTML = `<!DOCTYPE html>
             const edge = nextEdge(n.id, branch);
             current = edge ? findNode(edge.to) : null;
           } else {
-            // while / for
+            // while / do / for
             const edge = nextEdge(n.id, branch);
             if (branch === "false") {
               // leave loop
